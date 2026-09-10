@@ -142,6 +142,10 @@ def pipeline(save_path, f_reg, f_raw=None, f_reg_chan2=None, f_raw_chan2=None,
     
     logger.info("----------- ROI DETECTION")
     t11 = time.time()
+    # Predefined ROI masks skip detection, so these detection-only outputs do
+    # not otherwise receive values before the pipeline returns.
+    detect_outputs = None
+    redcell = None
     if stat is None:
         bad_frames = reg_outputs["badframes"]
         if badframes is not None:

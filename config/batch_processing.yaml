@@ -1,0 +1,48 @@
+# Suite2p still-Cellpose batch processing configuration.
+# All values map directly to BatchProcessor fields.
+# Pass this file to scripts/run_batch.py.
+
+# ── Cellpose segmentation ────────────────────────────────────────────────────
+cellpose:
+  # Available models in mmzinn12/cellpose-retinal-models: cpdino_RGC-Snap, cpdino_BRN3A, cpdino_RPBMS
+  model_name_or_path: cpdino_RGC-Snap
+  # Set to null to use a local path in model_name_or_path without HF fetching.
+  hf_repo_id: mmzinn12/cellpose-retinal-models
+  diameter: [12.0, 12.0]
+  cellprob_threshold: 0.0
+  flow_threshold: 0.4
+
+# ── Image channels ───────────────────────────────────────────────────────────
+channels:
+  still_channel: 1       # 0-based; second channel of the snap TIFF
+  alignment_channel: 1   # channel used for alignment (same as still by default)
+  channel_axis: null     # null = auto-detect from image shape
+
+# ── Still-to-video alignment ─────────────────────────────────────────────────
+alignment:
+  mode: auto             # translation | affine | auto
+  auto_align: true
+  min_response: 0.1      # phase-correlation minimum response for translation
+  min_ecc: 0.5           # minimum ECC score for affine acceptance
+  max_abs_shift: 50.0    # maximum allowed shift in pixels
+  dy: 0                  # manual residual correction (pixels, positive = down)
+  dx: 0                  # manual residual correction (pixels, positive = right)
+
+# ── Suite2p settings ─────────────────────────────────────────────────────────
+# Full settings loaded from a pre-validated .npy file; individual overrides go there.
+settings_file: 2D_invitro_olympus
+
+# ── Acquisition / database parameters ───────────────────────────────────────
+acquisition:
+  nchannels: 1
+  functional_chan: 1     # 1-based; Suite2p convention
+
+# ── Batch control ────────────────────────────────────────────────────────────
+batch:
+  output_folder: suite2p
+  skip_completed: true
+  save_qc: true
+  delete_binary_after: true
+  stop_on_error: false
+  dry_run: false
+  device: null           # null = auto (uses cuda if available, else cpu)
