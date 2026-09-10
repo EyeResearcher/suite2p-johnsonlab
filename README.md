@@ -167,6 +167,84 @@ If you are using a GPU, make sure its drivers and the cuda libraries are correct
 
 An example dataset is provided [here](https://drive.google.com/drive/folders/0B649boZqpYG1R3ota25jdUthSzQ?resourcekey=0-wSoqFv5rnE6TERPcJHwQtQ). It's a single-plane, single-channel recording.
 
+## Still-image Cellpose pipeline
+
+This repository extends the standard Suite2p pipeline with a workflow that
+uses a **high-resolution still snapshot** acquired alongside the video to
+drive ROI segmentation with Cellpose, then feeds those masks back into
+Suite2p's extraction stage. This is the primary path used by the Johnson Lab.
+
+### How it works
+
+1. **Registration** — the raw TIFF movie is motion-corrected by Suite2p
+   (registration-only pass), producing a registered binary and a mean image.
+2. **Segmentation** — Cellpose runs on the still snapshot (`*_snap.tif` or
+   `*_snap.oir`), producing high-resolution integer label masks.
+3. **Alignment** — the hires masks are resized to video resolution. An
+   optional automatic alignment step (phase correlation → ECC affine)
+   corrects any spatial offset between the still and the video field of view.
+4. **Extraction** — the aligned masks are converted to a Suite2p `stat` array
+   and passed directly to Suite2p's extraction/deconvolution/classification
+   pipeline, bypassing its built-in detector entirely.
+
+### What you need
+
+| Item | Notes |
+|---|---|
+| Raw movie TIFF | Standard multi-page TIFF; single-plane, single-channel |
+| Still snapshot TIFF | `<video_stem>_snap.tif` in the same recording folder |
+| Cellpose model | Local path or a model name from `mmzinn12/cellpose-retinal-models` on HuggingFace |
+| Suite2p settings file | A pre-validated `.npy` settings file in `config/settings_defaults/` |
+| `config/batch_processing.yaml` | Specifies model, channel, alignment, and batch parameters |
+
+### Running the batch pipeline
+
+```bash
+# Preview what would be processed (no computation)
+python scripts/run_batch.py --root /path/to/recordings --config config/batch_processing.yaml --dry-run
+
+# Run the full pipeline
+python scripts/run_batch.py --root /path/to/recordings --config config/batch_processing.yaml
+```
+
+The runner auto-discovers all recording TIFFs beneath `--root`, pairs each
+with its `*_snap` still, skips already-completed experiments, and writes a
+JSON results summary at `<root>/still_cellpose_batch_results.json`.
+
+### Expected outputs
+
+Each processed recording produces the following files under
+`<recording_folder>/<output_folder>/plane0/`:
+
+| File | Contents |
+|---|---|
+| `F.npy` | ROI fluorescence traces `(n_rois, n_frames)` |
+| `Fneu.npy` | Neuropil fluorescence traces |
+| `spks.npy` | Deconvolved spike traces |
+| `stat.npy` | Per-ROI statistics (pixel indices, centroids, etc.) |
+| `iscell.npy` | ROI classification labels |
+| `ops.npy` | Full pipeline settings and registration metrics |
+| `cellpose_masks.npy` | Integer label image at video resolution |
+| `cellpose_masks_hires.npy` | Integer label image at still resolution |
+| `still_alignment.json` | Alignment method, matrix, and QC metrics |
+| `cellpose_mask_overlay.png` | QC image: masks contoured over mean video frame |
+
+### Key classes
+
+**`StillProcessor`** (`suite2p/still_cellpose.py`) — array-level primitives:
+loads a still channel, runs Cellpose, resizes/shifts/warps label masks,
+estimates still-to-video alignment, and exposes `resolve_model()` for
+HuggingFace model fetching.
+
+**`Suite2pInterface`** (`suite2p/still_cellpose.py`) — Suite2p integration:
+loads a registered plane's context, converts label masks to a `stat` array,
+and runs the extraction pipeline with predefined ROIs.
+
+**`BatchProcessor`** (`suite2p/still_cellpose_batch.py`) — orchestration:
+holds all processing configuration as dataclass fields and exposes
+`process(experiment)` for a single recording and `run(root)` for a full
+directory tree.
+
 ## Getting started
 
 The quickest way to start is to open the GUI from a command line terminal. You might need to open an anaconda prompt if you did not add anaconda to the path. Make sure to run this from a directory in which you have **WRITE** access (suite2p saves a couple temporary files in your current directory):
